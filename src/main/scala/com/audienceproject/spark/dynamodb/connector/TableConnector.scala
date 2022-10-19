@@ -28,12 +28,15 @@ import com.audienceproject.shaded.google.common.util.concurrent.RateLimiter
 import com.audienceproject.spark.dynamodb.catalyst.JavaConverter
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.sources.Filter
+import org.slf4j.LoggerFactory
 
 import scala.annotation.tailrec
 import scala.collection.JavaConverters._
 
 private[dynamodb] class TableConnector(tableName: String, parallelism: Int, parameters: Map[String, String])
     extends DynamoConnector with DynamoWritable with Serializable {
+
+    @transient private val logger = LoggerFactory.getLogger(this.getClass)
 
     private val consistentRead = parameters.getOrElse("stronglyconsistentreads", "false").toBoolean
     private val filterPushdown = parameters.getOrElse("filterpushdown", "true").toBoolean
@@ -42,6 +45,7 @@ private[dynamodb] class TableConnector(tableName: String, parallelism: Int, para
     private val providerClassName = parameters.get("providerclassname")
 
     override val filterPushdownEnabled: Boolean = filterPushdown
+
 
     override val (keySchema, readLimit, writeLimit, itemLimit, totalSegments) = {
         val table = getDynamoDB(region, roleArn, providerClassName).getTable(tableName)
@@ -54,7 +58,14 @@ private[dynamodb] class TableConnector(tableName: String, parallelism: Int, para
         val bytesPerRCU = parameters.getOrElse("bytesperrcu", "4000").toInt
         val maxPartitionBytes = parameters.getOrElse("maxpartitionbytes", "128000000").toInt
         val targetCapacity = parameters.getOrElse("targetcapacity", "1").toDouble
-        val readFactor = if (consistentRead) 1 else 2
+        logger.info(s"Target Capacity: $targetCapacity")
+        val readFactor = if (consistentRead) {
+            logger.info("DDB Consistent Read Enabled.")
+            1
+        } else{
+            logger.info("DDB Consistent Read Disabled")
+            2
+        }
 
         // Table parameters.
         val tableSize = desc.getTableSizeBytes
@@ -69,23 +80,35 @@ private[dynamodb] class TableConnector(tableName: String, parallelism: Int, para
         })
 
         // Provisioned or on-demand throughput.
-        val readThroughput = parameters.getOrElse("throughput", Option(desc.getProvisionedThroughput.getReadCapacityUnits)
+        val rcus = Option(desc.getProvisionedThroughput.getReadCapacityUnits)
+        logger.info(s"Provisioned RCUs: $rcus")
+        val readThroughput = parameters.getOrElse("throughput", rcus
             .filter(_ > 0).map(_.longValue().toString)
             .getOrElse("100")).toLong
-        val writeThroughput = parameters.getOrElse("throughput", Option(desc.getProvisionedThroughput.getWriteCapacityUnits)
+        logger.info(s"Configured DDB Read Throughput: $readThroughput")
+
+        val wcus = Option(desc.getProvisionedThroughput.getWriteCapacityUnits)
+        logger.info(s"Provisioned WCUs: $wcus")
+        val writeThroughput = parameters.getOrElse("throughput", wcus
             .filter(_ > 0).map(_.longValue().toString)
             .getOrElse("100")).toLong
+        logger.info(s"Configured DDB Write Throughput: $writeThroughput")
 
         // Rate limit calculation.
         val avgItemSize = tableSize.toDouble / itemCount
         val readCapacity = readThroughput * targetCapacity
         val writeCapacity = writeThroughput * targetCapacity
 
+        logger.info(s"Read Capacity: $readCapacity")
+        logger.info(s"Write Capacity: $writeCapacity")
+        logger.info(s"Parallelism: $parallelism")
+
         val readLimit = readCapacity / parallelism
         val itemLimit = ((bytesPerRCU / avgItemSize * readLimit).toInt * readFactor) max 1
 
         val writeLimit = writeCapacity / parallelism
-
+        logger.info(s"Read Limit: $readLimit")
+        logger.info(s"Write Limit: $writeLimit")
         (keySchema, readLimit, writeLimit, itemLimit, numPartitions)
     }
 
