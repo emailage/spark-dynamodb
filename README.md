@@ -1,4 +1,12 @@
-# Spark+DynamoDB
+> [!WARNING]
+> **This repository will no longer be accessible after 30th September 2026.**
+>
+> This project has been migrated to a consolidated monorepo. Please update your bookmarks, forks,
+> and any CI/CD pipelines to point to the new location:
+>
+> **➡ [https://github.com/lexisnexis-risk-solutions/emailage-public-clients](https://github.com/lexisnexis-risk-solutions/emailage-public-clients)**
+>
+> No further updates will be made to this repository.# Spark+DynamoDB
 Plug-and-play implementation of an Apache Spark custom data source for AWS DynamoDB.
 
 We published a small article about the project, check it out here:
