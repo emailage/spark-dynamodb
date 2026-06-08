@@ -6,7 +6,9 @@
 >
 > **➡ [https://github.com/lexisnexis-risk-solutions/emailage-public-clients](https://github.com/lexisnexis-risk-solutions/emailage-public-clients)**
 >
-> No further updates will be made to this repository.# Spark+DynamoDB
+> No further updates will be made to this repository.
+
+# Spark+DynamoDB
 Plug-and-play implementation of an Apache Spark custom data source for AWS DynamoDB.
 
 We published a small article about the project, check it out here:
